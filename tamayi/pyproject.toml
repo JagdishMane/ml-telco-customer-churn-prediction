@@ -1,0 +1,37 @@
+[project]
+name = "telco-customer-churn-prediction"
+version = "0.1.0"
+description = "Customer churn prediction for telecom, with notebooks and a FastAPI + Streamlit serving example (AAI-510, Group 6)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+# A single dependency set covers the notebooks and the deployment example, so a plain
+# `uv sync` produces an environment that can run everything. scikit-learn and joblib are
+# pinned to the versions that produced models/best_model.pkl and preprocessor.pkl, so the
+# saved artifacts always unpickle cleanly.
+dependencies = [
+    # Analysis and modeling (notebooks)
+    "pandas>=2.2",
+    "numpy>=2.2",
+    "scikit-learn==1.9.0",
+    "joblib==1.4.2",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "xgboost>=3.2",
+    "jupyter>=1.1",
+    # Deployment API (deployment/api)
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.38",
+    "python-multipart>=0.0.20",
+    "pydantic>=2",
+    "python-dotenv>=1.0",
+    "openai>=2",
+    # Deployment client (deployment/client)
+    "streamlit>=1.58",
+    "requests>=2.32",
+]
+
+[tool.uv]
+# Keep the notebooks and deployment example as a single installable environment.
+package = false

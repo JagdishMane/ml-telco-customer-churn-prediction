@@ -1,0 +1,51 @@
+{
+  // Tasks to run the churn deployment example from VS Code.
+  // The compound "Start churn app (API + client)" task is the default build task,
+  // so Ctrl+Shift+B starts both the API and the Streamlit client together.
+  // All tasks run from the tamayi/ folder, where pyproject.toml and uv.lock live.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start API (uvicorn)",
+      "type": "shell",
+      "command": "uv",
+      "args": ["run", "uvicorn", "deployment.api.main:app", "--reload"],
+      "options": {
+        "cwd": "${workspaceFolder}/tamayi"
+      },
+      "isBackground": true,
+      "presentation": {
+        "group": "churn-app",
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Start Streamlit client",
+      "type": "shell",
+      "command": "uv",
+      "args": ["run", "streamlit", "run", "deployment/client/app.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/tamayi"
+      },
+      "isBackground": true,
+      "presentation": {
+        "group": "churn-app",
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Start churn app (API + client)",
+      "dependsOn": ["Start API (uvicorn)", "Start Streamlit client"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}
