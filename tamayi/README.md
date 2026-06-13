@@ -181,9 +181,32 @@ Evaluation metrics:
 
 Special emphasis is placed on Recall and ROC-AUC, because missing a likely churner has a higher business cost than a false alarm.
 
+What each metric means for this project:
+
+| Metric | What it means for this project |
+| --- | --- |
+| Accuracy | Of all customers in the test split, the share the model labels correctly as churn or stay. It is a useful headline number, but with about 33 percent churn it can look high while still missing churners, so we do not rely on it alone for retention decisions. |
+| Precision | Of the customers the model flags as likely to churn, the share who actually churn. High precision means a retention campaign wastes little budget on customers who were never going to leave, keeping the cost of discounts and outreach focused on genuine churn risk. |
+| Recall | Of the customers who actually churn, the share the model successfully flags. This is our priority metric, because a missed churner is lost revenue. We accept some false alarms to catch more leavers, and we tune the decision threshold below 0.5 to raise recall. |
+| F1-Score | The harmonic mean of precision and recall, summarising both in one number. It rewards a model that catches churners (recall) without flooding the retention team with false alarms (precision). We use it to compare models when we want balanced performance rather than favouring one error type. |
+| ROC-AUC | The probability that the model scores a random churner higher than a random non-churner, across all thresholds. At about 0.80 our model ranks churn risk well above chance. Because it is threshold-independent, it is our main tool for comparing models before we pick an operating threshold. |
+| Confusion Matrix | A two-by-two table of predictions versus reality: churners caught, churners missed (false negatives), false alarms (false positives), and stayers correctly cleared. It makes the costly false negatives visible, letting us see how many likely churners would slip through at a given decision threshold. |
+| Classification Report | A scikit-learn summary printing precision, recall, and F1 for both the churn and stay classes, plus support counts. It reports performance per class rather than overall, confirming the model does not earn its scores by simply favouring the larger stay class and neglecting churners. |
+
 ### 6. Deployment (Discussion)
 
 Following the assignment guidance, deployment is described rather than fully built. The discussion covers the deployment type (batch scoring versus real-time API), latency and cost considerations, model serialization, and where the model could be hosted, along with monitoring for data drift.
+
+#### Working example application
+
+To make the discussion concrete, the `deployment/` folder contains a small, runnable example that serves the trained model. It is split into two parts:
+
+* **API (`deployment/api/`).** A FastAPI service that loads `best_model.pkl` and `preprocessor.pkl`, rebuilds the engineered features exactly as the feature-engineering notebook, applies the saved preprocessor, then scores. It exposes `/predict` (one customer), `/predict/batch` (a CSV of many customers), `/schema` (the seven input fields), and `/health`.
+* **Client (`deployment/client/`).** A Streamlit application that calls the API over HTTP. A user can score a single customer through a guided form, upload a CSV for batch scoring and download the results, and adjust the decision threshold (defaulting to the recall-favoring 0.40 from the evaluation). The form is built from the API's `/schema`, so the allowed values live in one place.
+
+An optional, fully self-contained extra: when an OpenAI-compatible LLM is configured (e.g. DeepSeek, Qwen), the Streamlit app offers a plain-text path where the user describes the customer and the assistant collects the seven fields conversationally before scoring. With no LLM key the manual form and batch upload still work end to end.
+
+This example is intentionally discussion-grade rather than production-hardened: the data is synthetic, there is no authentication, and Gender (which carries no predictive signal) should be excluded from any real decisioning. See `deployment/README.md` for full run instructions.
 
 ---
 
@@ -219,19 +242,33 @@ tamayi/
 │
 ├── models/
 │   ├── best_model.pkl
-│   ├── scaler.pkl
-│   ├── encoder.pkl
+│   ├── preprocessor.pkl
 │   └── metrics.json
+│
+├── deployment/
+│   ├── api/                  FastAPI scoring service
+│   │   ├── main.py           endpoints: /health, /schema, /predict, /predict/batch, /chat
+│   │   ├── model.py          loads artifacts, engineers features, scores
+│   │   ├── schemas.py        request and response validation
+│   │   └── llm.py            optional LLM-guided field collection
+│   │
+│   ├── client/               Streamlit example application
+│   │   └── app.py            manual form, optional plain-text chat, batch CSV upload
+│   │
+│   └── README.md
 │
 ├── reports/
 │   └── final_report.pdf
 │
-├── requirements.txt
+├── pyproject.toml            project dependencies (notebooks + deployment)
+├── uv.lock                   pinned, reproducible lockfile
 ├── LICENSE
 └── README.md
 ```
 
 The five numbered notebooks form the working pipeline. The `Final Project SectionX-Team 6.ipynb` notebook is the single report-style submission notebook that assembles every required section end to end. Replace the `X` with the team's section number before submitting.
+
+The `deployment/` folder serves the trained model. The model artifacts are saved as `best_model.pkl` (the fitted estimator) and `preprocessor.pkl` (a single `ColumnTransformer` that scales numerics and one-hot encodes categoricals), with `metrics.json` recording every candidate model's scores.
 
 ---
 
@@ -246,17 +283,41 @@ cd ml-telco-customer-churn-prediction/tamayi
 
 ### Install dependencies
 
+This project uses [uv](https://docs.astral.sh/uv/) to manage the environment. One command creates an isolated `.venv` and installs the exact pinned versions from `uv.lock`:
+
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+
+Then prefix any command with `uv run` to execute it inside that environment, or activate the venv directly. If you prefer plain pip, you can export a `requirements.txt` from the lockfile with `uv export --no-hashes -o requirements.txt` and `pip install -r requirements.txt` into a venv of your own.
 
 ### Launch Jupyter Notebook
 
 ```bash
-jupyter notebook
+uv run jupyter notebook
 ```
 
 Run the notebooks in order, from `01_data_understanding.ipynb` through `05_model_evaluation.ipynb`. Notebook `03` writes the processed feature matrix to `data/processed/`, and notebook `04` saves the trained model artifacts to `models/`.
+
+### Run the example application (Streamlit)
+
+The deployment example has two parts that run as separate processes. Use two terminals, both started from the `tamayi/` folder (the same folder you cloned into above). `uv sync` already installed everything they need.
+
+Terminal 1, start the API:
+
+```bash
+uv run uvicorn deployment.api.main:app --reload
+```
+
+Terminal 2, start the Streamlit client:
+
+```bash
+uv run streamlit run deployment/client/app.py
+```
+
+The API serves on `http://localhost:8000` (interactive docs at `/docs`), and the Streamlit app opens in the browser and calls it. The optional LLM path is enabled by copying `deployment/api/.env.example` to `deployment/api/.env` and setting the LLM variables. See `deployment/README.md` for details.
+
+In Visual Studio Code you can start both the API and the Streamlit client at once with `Ctrl+Shift+B` (Run Build Task). This runs the default task defined in `.vscode/tasks.json`, which launches each service in its own terminal panel.
 
 ---
 
@@ -267,6 +328,7 @@ Run the notebooks in order, from `01_data_understanding.ipynb` through `05_model
 * Exploratory Data Analysis
 * Modeling
 * Documentation
+* Streamlit example application
 
 ### Ved Prakash Dwivedi
 
